@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AetherFlow - AI手势驱动粒子交互特效系统</title>
+  <meta name="description" content="基于 MediaPipe Hands 和 HTML5 Canvas 的实时 AI 手势识别与高端物理粒子交互特效系统">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- 引入 Google Fonts (Outfit 和 JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- 引入 MediaPipe Hands CDN 依赖 -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <!-- 主容器：承载视频与 Canvas -->
+  <div id="app-container">
+    <!-- 隐藏的或全屏的视频输入元素，用于捕捉摄像头帧 -->
+    <video id="webcam" autoplay playsinline muted></video>
+    
+    <!-- 用于渲染粒子特效和手势诊断骨骼的 Canvas -->
+    <canvas id="particle-canvas"></canvas>
+    
+    <!-- 全屏科幻暗化滤镜层 -->
+    <div id="ar-overlay"></div>
+  </div>
+
+  <!-- 全局加载遮罩层 -->
+  <div id="loading-screen" class="active">
+    <div class="loader-content">
+      <div class="radar-spinner">
+        <div class="circle circle-1"></div>
+        <div class="circle circle-2"></div>
+        <div class="circle circle-3"></div>
+      </div>
+      <h2>AetherFlow</h2>
+      <p class="status-msg">正在初始化摄像头权限...</p>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 15%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 顶部标题栏（玻璃魔态） -->
+  <header id="main-header">
+    <h1 class="logo-title">Aether<span>Flow</span></h1>
+    <div class="system-status">
+      <span class="pulse-dot"></span>
+      <span class="status-text">系统就绪</span>
+    </div>
+  </header>
+
+  <!-- 浮动玻璃魔态控制面板 -->
+  <main id="control-panel">
+    <div class="panel-section">
+      <h3>特效主题主题选择</h3>
+      <div class="theme-grid">
+        <button class="theme-btn active" data-theme="fire">
+          <span class="icon">🔥</span>
+          <span class="name">烈焰风暴</span>
+        </button>
+        <button class="theme-btn" data-theme="aurora">
+          <span class="icon">🌌</span>
+          <span class="name">极光魔幻</span>
+        </button>
+        <button class="theme-btn" data-theme="cyber">
+          <span class="icon">⚡</span>
+          <span class="name">霓虹火花</span>
+        </button>
+        <button class="theme-btn" data-theme="void">
+          <span class="icon">🌀</span>
+          <span class="name">虚空引力</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>AR 融合调节</h3>
+      <div class="control-row">
+        <label for="camera-opacity">视频透明度</label>
+        <div class="range-container">
+          <input type="range" id="camera-opacity" min="0" max="100" value="40">
+          <span class="value-display">40%</span>
+        </div>
+      </div>
+      
+      <div class="control-row toggle-row">
+        <label for="toggle-landmarks">显示手部骨骼</label>
+        <label class="switch">
+          <input type="checkbox" id="toggle-landmarks" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>粒子物理参数</h3>
+      <div class="control-row">
+        <label for="particle-density">生成速率</label>
+        <div class="range-container">
+          <input type="range" id="particle-density" min="1" max="10" value="5">
+          <span class="value-display">中等</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>各主题粒子大小</h3>
+      <div class="control-row">
+        <label for="size-fire">🔥 烈焰粒子大小</label>
+        <div class="range-container">
+          <input type="range" id="size-fire" min="1" max="15" value="4.0" step="0.5">
+          <span class="value-display">4.0px</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label for="size-aurora">🌌 极光粒子大小</label>
+        <div class="range-container">
+          <input type="range" id="size-aurora" min="1" max="25" value="5.0" step="0.5">
+          <span class="value-display">5.0px</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label for="size-cyber">⚡ 火花粒子粗细</label>
+        <div class="range-container">
+          <input type="range" id="size-cyber" min="1" max="12" value="3.5" step="0.5">
+          <span class="value-display">3.5px</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label for="size-void">🌀 虚空粒子大小</label>
+        <div class="range-container">
+          <input type="range" id="size-void" min="1" max="15" value="4.0" step="0.5">
+          <span class="value-display">4.0px</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>虚空引力场强度</h3>
+      <div class="control-row">
+        <label for="void-gravity-mult">吸引引力大小</label>
+        <div class="range-container">
+          <input type="range" id="void-gravity-mult" min="0" max="10" value="1.0" step="0.1">
+          <span class="value-display">1.0x</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>特效视频录制</h3>
+      <div class="recording-container">
+        <button id="record-btn" class="record-btn">
+          <span class="record-dot"></span>
+          <span id="record-btn-text">开始录制</span>
+        </button>
+        <span id="record-timer" class="record-timer">00:00</span>
+      </div>
+      <div class="control-row" style="margin-top: 8px;">
+        <select id="record-format" class="format-select">
+          <option value="webm">WebM (推荐 - 60帧原生无损)</option>
+          <option value="mp4">MP4 (60帧高兼容格式)</option>
+          <option value="avi">AVI (60帧兼容VLC播放)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-section status-section">
+      <h3>运行诊断与手势检测</h3>
+      <div class="diagnostics-grid">
+        <div class="diag-card">
+          <span class="label">当前手势</span>
+          <span id="gesture-name" class="value text-glow">等待检测...</span>
+        </div>
+        <div class="diag-card">
+          <span class="label">实时帧率</span>
+          <span id="fps-display" class="value">00 FPS</span>
+        </div>
+        <div class="diag-card">
+          <span class="label">活动手数量</span>
+          <span id="hands-count" class="value">0 / 2</span>
+        </div>
+        <div class="diag-card">
+          <span class="label">粒子数量</span>
+          <span id="particle-count" class="value">0</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 手势控制说明小浮窗 -->
+  <div id="gesture-guide">
+    <div class="guide-toggle">📖 手势互动指南</div>
+    <div class="guide-content">
+      <div class="guide-item">
+        <span class="gesture-icon">👋</span>
+        <div>
+          <h4>张开手掌 (Open Hand)</h4>
+          <p>在掌心处触发高频爆发的粒子喷涌特效</p>
+        </div>
+      </div>
+      <div class="guide-item">
+        <span class="gesture-icon">✊</span>
+        <div>
+          <h4>捏合握拳 (Fist)</h4>
+          <p>产生微型黑洞重力，吸引周围粒子凝聚</p>
+        </div>
+      </div>
+      <div class="guide-item">
+        <span class="gesture-icon">✌️</span>
+        <div>
+          <h4>胜利手势 (V Gesture)</h4>
+          <p>食指与中指尖拉出交织环绕的极光流体</p>
+        </div>
+      </div>
+      <div class="guide-item">
+        <span class="gesture-icon">👆</span>
+        <div>
+          <h4>普通手指移动 (Normal)</h4>
+          <p>指尖滑动在空中留下一道炫酷的粒子拖尾</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入主应用入口模块 -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
